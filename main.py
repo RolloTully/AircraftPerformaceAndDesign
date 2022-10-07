@@ -1,5 +1,6 @@
 
 from numpy import e, array, float32
+import numpy as np
 import matplotlib.pyplot as plt
 import csv
 from tkinter import filedialog
@@ -19,25 +20,26 @@ class Atmosphere(object):
         self.Rho0=1.225
     def get_AtmosProperties(self, height):
         '''Computes Static pressure, Temperature, density, and the local speed of sound'''
-        if 0 < height <= 11000:
+        if 0 < height <= 11e3:
             self.Local_Temperature = self.T0+self.L0*(height-0)
-        elif 11000 < height <= 20000:
+        elif 11e3 < height <= 20e3:
             self.Local_Temperature = self.T11+self.L11*(height-11)
-        elif 20000 < height <= 32000:
+        elif 20e3 < height <= 32e3:
             self.Local_Temperature = self.T20+self.L20*(height-20)
-        elif 32000 < height:
+        elif 32e3< height:
             print("Height out of range")
-        if 0 < height <= 11:
+        if 0 < height <= 11e3:
             self.Local_Pressure = self.P0*(1+(self.L0/self.T0)*height)**(-self.g/(self.R*self.L0))
-        elif 11 < height <= 20:
-            self.Local_Pressure = self.P11*e**((-self.g/(self.R*self.T11))*(height-11))
-        elif 20 < height:
+        elif 11e3 < height <= 20e3:
+            self.Local_Pressure = self.P11*e**((-self.g/(self.R*self.T11))*(height-11e3))
+        elif 20e3 < height <= 32e3:
             '''To be Implemented'''
             pass
-        elif 32 < height:
+        elif 32e3 < height:
             print("Height out of range")
         self.Local_Desnity = self.Local_Pressure/(self.R*self.Local_Temperature)
-        return self.Local_Temperature, self.Local_Pressure, self.Local_Desnity
+        self.a = (self.gamma*self.R*self.Local_Temperature)**0.5
+        return self.Local_Temperature, self.Local_Pressure, self.Local_Desnity, self.a
 
 class Tools():
     def ImportFlightPlan(self):
@@ -50,8 +52,14 @@ class Tools():
                     self.formatted = array(self.formatted, dtype = float32)
                     self.ExportFlightPlan.append(self.formatted)
             return array(self.ExportFlightPlan)
-    def ImpactPressure(self, StaticPressure, Mach, Gamma):
-        return StaticPressure*((1+((Gamma-1)/2)*Mach**2   )**(Gamma/(Gamma-1))-1)
+
+    def Mach_from_pressures(self, param,gamma):
+        Sp,Ip = param[0],param[1]
+        return  ((2/(gamma-1))*(((Ip/Sp)+1)**((gamma-1)/gamma)-1))**0.5
+
+    def ImpactPressure(self, param, Gamma):
+        return param[0]*((1+((Gamma-1)/2)*param[1]**2   )**(Gamma/(Gamma-1))-1)
+
 
 
 class main():
@@ -59,15 +67,27 @@ class main():
         self.atmosphere = Atmosphere()
         self.tools = Tools()
         self.FlightPlan = self.tools.ImportFlightPlan()
-        print(self.FlightPlan)
         self.Time = self.FlightPlan[:,0]
         self.Alt  = self.FlightPlan[:,3]
-        self.Mach = self.FlightPlan[0,4]
-        self.Atmospressure = [self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt]
-        print(self.Atmospressure)
-        self.ImpactPressures = self.tools.ImpactPressure(self.Atmospressure, self.Mach, self.gamma)
-        #self.mainloop()
+        self.ImpactPressure = self.FlightPlan[:,4]
+        self.Temperature = self.FlightPlan[:,5]
+        self.mainloop()
     def mainloop(self):
-        print(self.atmosphere.get_AtmosProperties(10))
+        self.Atmospressure = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt])
+        #Static Pressure, Impact pressure
+        self.param_pairs = np.dstack((self.Atmospressure[:,1], self.ImpactPressure))
+        self.mach = np.array([self.tools.Mach_from_pressures(self.pair, self.atmosphere.gamma) for self.pair in self.param_pairs[0]])
+
+        plt.plot(self.Time, self.Atmospressure[:,0]/np.amax(self.Atmospressure[:,0]))
+        plt.plot(self.Time, self.Atmospressure[:,1]/np.amax(self.Atmospressure[:,1]))
+        plt.plot(self.Time, self.Atmospressure[:,2]/np.amax(self.Atmospressure[:,2]))
+        plt.plot(self.Time, self.Atmospressure[:,3]/np.amax(self.Atmospressure[:,3]))
+        plt.plot(self.Time, self.Temperature/np.amax(self.Temperature))
+        plt.plot(self.Time, self.mach)
+        plt.show()
+
+        plt.plot(self.Time, self.mach*self.Atmospressure[:,3])
+        plt.plot(self.Time, self.mach*(self.Temperature*self.atmosphere.gamma*self.atmosphere.R)**0.5)
+        plt.show()
 if __name__=="__main__":
     main()
