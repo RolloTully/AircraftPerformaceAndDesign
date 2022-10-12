@@ -39,7 +39,7 @@ class Atmosphere(object):
             print("Height out of range")
         self.Local_Desnity = self.Local_Pressure/(self.R*self.Local_Temperature)
         self.a = (self.gamma*self.R*self.Local_Temperature)**0.5
-        return self.Local_Temperature, self.Local_Pressure, self.Local_Desnity, self.a
+        return self.Local_Temperature/self.T0, self.Local_Pressure/self.P0, self.Local_Desnity, self.a
 
 class Tools():
     def ImportFlightPlan(self):
@@ -66,12 +66,14 @@ class main():
     def __init__(self):
         self.atmosphere = Atmosphere()
         self.tools = Tools()
-        self.FlightPlan = self.tools.ImportFlightPlan()
-        self.Time = self.FlightPlan[:,0]
-        self.Alt  = self.FlightPlan[:,3]
-        self.ImpactPressure = self.FlightPlan[:,4]
-        self.Temperature = self.FlightPlan[:,5]
-        self.mainloop()
+        print(self.atmosphere.get_AtmosProperties(15000))
+        #self.FlightPlan = self.tools.ImportFlightPlan()
+
+        #self.Time = self.FlightPlan[:,0]
+        #self.Alt  = self.FlightPlan[:,3]
+        #self.ImpactPressure = self.FlightPlan[:,4]
+        #self.Temperature = self.FlightPlan[:,5]
+        #self.mainloop()
     def mainloop(self):
         self.Atmospressure = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt])
         #Static Pressure, Impact pressure
