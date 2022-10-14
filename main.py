@@ -60,6 +60,23 @@ class Tools():
     def ImpactPressure(self, param, Gamma):
         return param[0]*((1+((Gamma-1)/2)*param[1]**2   )**(Gamma/(Gamma-1))-1)
 
+    def FlightPathAngle(self):
+
+
+
+class Craft(object):
+    def __init__(self, weight, fmf, n2, ct2):
+        self.weight = weight    #Craft weight
+        self.fuel_mass_fraction = fmf   #fuel mass fraction
+        self.TSFC_L_E = n2      #Thrust specific fuel consumption lapse exponent
+        self.TSFC_L_C = ct2     #Thrust specific fuel consumption lapse constant
+
+class Aircraft(Craft):
+    def __init__(self, weight, fmf, n2, ct2, cd0, k, s):
+        Craft.__init__(self, weight, fmf, n2, ct2)  #Inherites Craft methods
+        self.CD0 = cd0  #Zero-lift drag coefficent
+        self.K = k  #Aircraft lift dependent drag factor
+        self.S = s  #Wing Area
 
 
 class main():
@@ -67,10 +84,9 @@ class main():
         self.atmosphere = Atmosphere()
         self.tools = Tools()
         print(self.atmosphere.get_AtmosProperties(15000))
-        #self.FlightPlan = self.tools.ImportFlightPlan()
-
-        #self.Time = self.FlightPlan[:,0]
-        #self.Alt  = self.FlightPlan[:,3]
+        self.FlightPlan = self.tools.ImportFlightPlan()
+        self.Time = self.FlightPlan[:,0]
+        self.Alt  = self.FlightPlan[:,3]
         #self.ImpactPressure = self.FlightPlan[:,4]
         #self.Temperature = self.FlightPlan[:,5]
         #self.mainloop()
