@@ -71,18 +71,15 @@ class main():
         self.mainloop()
     def mainloop(self):
         self.Atmos_conditions = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt])
-        #self.Static_pressure = self.Atmos_conditions[:,]
+        self.Static_pressure = self.Atmos_conditions[:,1]
+        self.a = self.Atmos_conditions[:,3]
         #Static Pressure, Impact pressure
-        self.param_pairs = np.dstack((self.Atmos_conditions[:,1], self.ImpactPressure))
+        self.param_pairs = np.dstack((self.Static_pressure, self.ImpactPressure))
         self.mach = np.array([self.tools.Mach_from_pressures(self.pair, self.atmosphere.gamma) for self.pair in self.param_pairs[0]])
-        self.TAS = self.mach*self.Atmos_conditions[:,3]
+        self.TAS = self.mach*self.a
         self.climb_rate = (np.diff(self.Alt)/np.diff(self.Time))*np.sign(np.diff(self.Alt))
-        print(np.diff(self.Alt), np.diff(self.Time))
-        print(self.TAS, self.climb_rate)
-        self.gamma = np.degrees(np.arcsin(self.climb_rate[:4000]/self.TAS[:4000]))
-        print(self.gamma)
-        plt.plot(self.gamma)
-        plt.show()
+        self.gamma = np.degrees(np.arcsin(self.climb_rate/self.TAS[:-1]))   #Flight path angle
+
 
         '''
         plt.plot(self.Time, self.Atmos_conditions[:,0]/np.amax(self.Atmos_conditions[:,0]))
