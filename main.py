@@ -39,7 +39,7 @@ class Atmosphere(object):
             print("Height out of range")
         self.Local_Desnity = self.Local_Pressure/(self.R*self.Local_Temperature)
         self.a = (self.gamma*self.R*self.Local_Temperature)**0.5
-        return self.Local_Temperature/self.T0, self.Local_Pressure/self.P0, self.Local_Desnity, self.a
+        return self.Local_Temperature, self.Local_Pressure, self.Local_Desnity, self.a
 
 class Tools():
     def ImportFlightPlan(self):
@@ -55,8 +55,7 @@ class Tools():
     def Mach_from_pressures(self, param,gamma):
         Sp,Ip = param[0],param[1]
         return  ((2/(gamma-1))*(((Ip/Sp)+1)**((gamma-1)/gamma)-1))**0.5
-    def ImpactPressure(self, param, Gamma):
-        return param[0]*((1+((Gamma-1)/2)*param[1]**2   )**(Gamma/(Gamma-1))-1)
+
 
 
 
@@ -71,26 +70,32 @@ class main():
         self.Temperature = self.FlightPlan[:,5]
         self.mainloop()
     def mainloop(self):
-        self.Atmospressure = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt])
+        self.Atmos_conditions = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt])
+        #self.Static_pressure = self.Atmos_conditions[:,]
         #Static Pressure, Impact pressure
-        self.param_pairs = np.dstack((self.Atmospressure[:,1], self.ImpactPressure))
+        self.param_pairs = np.dstack((self.Atmos_conditions[:,1], self.ImpactPressure))
         self.mach = np.array([self.tools.Mach_from_pressures(self.pair, self.atmosphere.gamma) for self.pair in self.param_pairs[0]])
-        self.TAS = self.Atmospressure[:,3]*self.mach*np.sqrt(self.Atmospressure[:,0])
-        self.climb_rate = np.diff(self.Alt)/np.diff(self.FlightPlan[:,0])
+        self.TAS = self.mach*self.Atmos_conditions[:,3]
+        self.climb_rate = (np.diff(self.Alt)/np.diff(self.Time))*np.sign(np.diff(self.Alt))
+        print(np.diff(self.Alt), np.diff(self.Time))
         print(self.TAS, self.climb_rate)
-        self.gamma = np.arccos(self.TAS/self.climbrate)
+        self.gamma = np.degrees(np.arcsin(self.climb_rate[:4000]/self.TAS[:4000]))
+        print(self.gamma)
+        plt.plot(self.gamma)
+        plt.show()
 
         '''
-        plt.plot(self.Time, self.Atmospressure[:,0]/np.amax(self.Atmospressure[:,0]))
-        plt.plot(self.Time, self.Atmospressure[:,1]/np.amax(self.Atmospressure[:,1]))
-        plt.plot(self.Time, self.Atmospressure[:,2]/np.amax(self.Atmospressure[:,2]))
-        plt.plot(self.Time, self.Atmospressure[:,3]/np.amax(self.Atmospressure[:,3]))
+        plt.plot(self.Time, self.Atmos_conditions[:,0]/np.amax(self.Atmos_conditions[:,0]))
+        plt.plot(self.Time, self.Atmos_conditions[:,1]/np.amax(self.Atmos_conditions[:,1]))
+        plt.plot(self.Time, self.Atmos_conditions[:,2]/np.amax(self.Atmos_conditions[:,2]))
+        plt.plot(self.Time, self.Atmos_conditions[:,3]/np.amax(self.Atmos_conditions[:,3]))
         plt.plot(self.Time, self.Temperature/np.amax(self.Temperature))
         plt.plot(self.Time, self.mach)
         plt.show()
-        plt.plot(self.Time, self.mach*self.Atmospressure[:,3])
+        plt.plot(self.Time, self.mach*self.Atmos_conditions[:,3])
         plt.plot(self.Time, self.mach*(self.Temperature*self.atmosphere.gamma*self.atmosphere.R)**0.5)
         plt.show()
         '''
+
 if __name__=="__main__":
     main()
