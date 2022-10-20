@@ -33,7 +33,7 @@ class Atmosphere(object):
         elif 11e3 < height <= 20e3:
             self.Local_Pressure = self.P11*e**((-self.g/(self.R*self.T11))*(height-11e3))
         elif 20e3 < height <= 32e3:
-            '''To be Implemented'''
+            assert "Height out of range"
             pass
         elif 32e3 < height:
             print("Height out of range")
@@ -52,12 +52,12 @@ class Tools():
                     self.formatted = array(self.formatted, dtype = float32)
                     self.ExportFlightPlan.append(self.formatted)
             return array(self.ExportFlightPlan)
-    def Mach_from_pressures(self, param,gamma):
-        Sp,Ip = param[0],param[1]
+    def Mach_from_pressures(self, Sp, Ip,gamma):
         return  ((2/(gamma-1))*(((Ip/Sp)+1)**((gamma-1)/gamma)-1))**0.5
 class Craft(object):
     def __init__(self, Reference_Area, k, cd0, mtow, fmf, n2, ct2):
         self.atmosphere = Atmosphere()
+        self.tools = Tools()
         self.S = Reference_Area
         self.K = k
         self.Cd0 = cd0
@@ -67,17 +67,43 @@ class Craft(object):
         self.DW = self.MTOW - self.FW
         self.TSFCLE = n2
         self.TSFCLC = ct2
+
+    def get_live_weight(self,flightplan):
+        self.history = []
+        self.FlightPlan = flightplan
+
+        for self.index in range(0, self.FlightPlan.shape[0]-1):
+            self.local_atmos = self.atmosphere.get_AtmosProperties(self.FlightPlan[self.index,3])
+            self.time_step = self.FlightPlan[self.index+1,0] - self.FlightPlan[self.index,0]
+            self.mach = self.tools.Mach_from_pressures(self.local_atmos[1], self.FlightPlan[self.index, 4], 1.4)
+            self.climb_rate = (self.FlightPlan[self.index+1,3] - self.FlightPlan[self.index,3])/self.time_step
+            self.TAS = self.mach * self.local_atmos[3]
+            self.gamma = np.arcsin(self.climb_rate/self.TAS)
+            self.clcd = self.get_trimCLCD(self.gamma, self.mach, self.FlightPlan[self.index,3])
+            self.t_req = self.thurst_required(self.gamma, self.FlightPlan[self.index,3],self.clcd[1],self.mach)
+            self.TSFC = self.fuel_flow(self.local_atmos[0], self.mach)
+
+            self.fuel_rate = (self.t_req/1000)*self.TSFC
+            input()
+            print(self.t_req, self.fuel_rate,self.TSFC)
+            self.FW = self.FW-self.fuel_rate*self.time_step
+            #print(self.gamma, self.mach , self.FlightPlan[self.index,3])
+            self.history.append(self.FW)
+        return self.history
+
     def get_trimCLCD(self, gamma_fp, m, h):
         self.atmo = self.atmosphere.get_AtmosProperties(h)
-        self.cl = (2*(self.DW+self.FW)*np.cos(gamma_fp))/(self.atmo[2]*self.atmo[3]*m*self.S)
+        self.cl = (2*(self.DW+self.FW)*np.cos(gamma_fp))/(self.atmo[2]*((self.atmo[3]*m)**2)*self.S)
         self.cd = self.Cd0 + self.K*self.cl**2
         return [self.cl,self.cd]
+
+
     def thurst_required(self, gamma, h, cd, m):
         self.atmo = self.atmosphere.get_AtmosProperties(h)
-        self.drag = 0.5*self.atmo[1]*self.atmo[3]*m*self.S*cd
+        self.drag = 0.5*self.atmo[2]*((self.atmo[3]*m)**2)*self.S*cd
         return (self.FW+self.DW)*np.cos(gamma)+self.drag
     def fuel_flow(self, t, m):
-        return  (1/(3600*9.81))*self.TSFCLC*np.sqrt(t)*m**self.TSFCLE
+        return  (self.TSFCLC*np.sqrt(t)*m**self.TSFCLE)
 class main():
     def __init__(self):
         self.atmosphere = Atmosphere()
@@ -88,23 +114,20 @@ class main():
         self.Alt  = self.FlightPlan[:,3]
         self.ImpactPressure = self.FlightPlan[:,4]
         self.Temperature = self.FlightPlan[:,5]
-        self.mainloop()
+        plt.plot(self.craft.get_live_weight(self.FlightPlan))
+        plt.show()
+        #self.mainloop()
 
     def mainloop(self):
-        self.Atmos_conditions = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt])
-        self.Static_pressure = self.Atmos_conditions[:,1]
-        self.a = self.Atmos_conditions[:,3]
-        #Static Pressure, Impact pressure
-        self.mach = np.array([self.tools.Mach_from_pressures(self.pair, self.atmosphere.gamma) for self.pair in np.dstack((self.Static_pressure, self.ImpactPressure))[0]])
-        self.TAS = self.mach*self.a
-        self.climb_rate = (np.diff(self.Alt)/np.diff(self.Time))*np.sign(np.diff(self.Alt))
+        self.Atmos_conditions = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt]) #Computes the atmospheric properties alon the flight path
+        self.mach = np.array([self.tools.Mach_from_pressures(self.slice[0], self.slice[1], self.atmosphere.gamma) for self.slice in np.dstack((self.Atmos_conditions[:,1], self.ImpactPressure))[0]])
+        self.TAS = self.mach*self.Atmos_conditions[:,3]
+        self.climb_rate = (np.diff(self.Alt)/np.diff(self.Time))*np.sign(np.diff(self.Alt)) #Computes the aircraft climb rate
         self.gamma = np.arcsin(self.climb_rate/self.TAS[:-1])  #Flight path angle
         self.clcd_contin = np.array([self.craft.get_trimCLCD(self.slice[0],self.slice[1],self.slice[2]) for self.slice in np.dstack((self.gamma, self.mach[:-1], self.Alt[:-1]))[0]])
         self.t_req = np.array([self.craft.thurst_required(self.slice[0],self.slice[1],self.slice[2],self.slice[3]) for self.slice in np.dstack((self.gamma, self.Alt[:-1], self.clcd_contin[:,1],self.mach[:-1]))[0]])
-        print(self.t_req)
         self.TSFR = np.array([self.craft.fuel_flow(self.slice[0], self.slice[1])  for self.slice in np.dstack((self.Temperature,self.mach))[0]])
         self.fuel_flow = self.t_req*self.TSFR[:-1]
-
         plt.plot(self.t_req/np.max(self.t_req))
         plt.plot(self.fuel_flow/np.max(self.fuel_flow))
         plt.show()
