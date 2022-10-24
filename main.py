@@ -81,29 +81,35 @@ class Craft(object):
             self.gamma = np.arcsin(self.climb_rate/self.TAS)
             self.clcd = self.get_trimCLCD(self.gamma, self.mach, self.FlightPlan[self.index,3])
             self.t_req = self.thurst_required(self.gamma, self.FlightPlan[self.index,3],self.clcd[1],self.mach)
-            self.TSFC = self.fuel_flow(self.local_atmos[0], self.mach)
-
-            self.fuel_rate = (self.t_req/1000)*self.TSFC
-            input()
-            print(self.t_req, self.fuel_rate,self.TSFC)
+            self.tsfc = self.TSFC(self.local_atmos[0], self.mach)
+            self.fuel_rate = (self.t_req)*self.tsfc*(1/3600)
+            print(self.t_req, self.fuel_rate,self.tsfc)
             self.FW = self.FW-self.fuel_rate*self.time_step
-            #print(self.gamma, self.mach , self.FlightPlan[self.index,3])
+            print(self.gamma, self.mach , self.FlightPlan[self.index,3])
             self.history.append(self.FW)
         return self.history
 
     def get_trimCLCD(self, gamma_fp, m, h):
         self.atmo = self.atmosphere.get_AtmosProperties(h)
-        self.cl = (2*(self.DW+self.FW)*np.cos(gamma_fp))/(self.atmo[2]*((self.atmo[3]*m)**2)*self.S)
+        self.q = 0.5*self.atmosphere.gamma*self.atmo[1]*m**2
+        self.L = (self.FW+self.DW)*9.81*np.cos(gamma_fp)
+        self.cl = self.L/(self.q*self.S)
         self.cd = self.Cd0 + self.K*self.cl**2
+
+        print(self.q, self.L, self.cl, self.cd,self.S)
         return [self.cl,self.cd]
 
 
-    def thurst_required(self, gamma, h, cd, m):
+    def thurst_required(self, gamma, h, cd, m):#somethings fucked
+        #print(gamma,h,cd,m)
         self.atmo = self.atmosphere.get_AtmosProperties(h)
         self.drag = 0.5*self.atmo[2]*((self.atmo[3]*m)**2)*self.S*cd
-        return (self.FW+self.DW)*np.cos(gamma)+self.drag
-    def fuel_flow(self, t, m):
-        return  (self.TSFCLC*np.sqrt(t)*m**self.TSFCLE)
+        self.thrust_req = self.drag+(self.FW+self.DW)*9.81*np.sin(gamma)
+        #print(self.drag, (self.FW+self.DW)*9.81*np.sin(gamma))
+        return self.thrust_req
+
+    def TSFC(self, t, m):#working
+        return (1/3600*9.81)*(self.TSFCLC*np.sqrt(t/self.atmosphere.T0)*m**self.TSFCLE)
 class main():
     def __init__(self):
         self.atmosphere = Atmosphere()
@@ -122,14 +128,16 @@ class main():
         self.Atmos_conditions = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt]) #Computes the atmospheric properties alon the flight path
         self.mach = np.array([self.tools.Mach_from_pressures(self.slice[0], self.slice[1], self.atmosphere.gamma) for self.slice in np.dstack((self.Atmos_conditions[:,1], self.ImpactPressure))[0]])
         self.TAS = self.mach*self.Atmos_conditions[:,3]
-        self.climb_rate = (np.diff(self.Alt)/np.diff(self.Time))*np.sign(np.diff(self.Alt)) #Computes the aircraft climb rate
+        self.climb_rate = (np.diff(self.Alt)/np.diff(self.Time)) #Computes the aircraft climb rate
         self.gamma = np.arcsin(self.climb_rate/self.TAS[:-1])  #Flight path angle
         self.clcd_contin = np.array([self.craft.get_trimCLCD(self.slice[0],self.slice[1],self.slice[2]) for self.slice in np.dstack((self.gamma, self.mach[:-1], self.Alt[:-1]))[0]])
         self.t_req = np.array([self.craft.thurst_required(self.slice[0],self.slice[1],self.slice[2],self.slice[3]) for self.slice in np.dstack((self.gamma, self.Alt[:-1], self.clcd_contin[:,1],self.mach[:-1]))[0]])
-        self.TSFR = np.array([self.craft.fuel_flow(self.slice[0], self.slice[1])  for self.slice in np.dstack((self.Temperature,self.mach))[0]])
-        self.fuel_flow = self.t_req*self.TSFR[:-1]
-        plt.plot(self.t_req/np.max(self.t_req))
-        plt.plot(self.fuel_flow/np.max(self.fuel_flow))
+        self.TSFC = np.array([self.craft.TSFC(self.slice[0], self.slice[1])  for self.slice in np.dstack((self.Temperature,self.mach))[0]])
+        self.fuel_flow = (self.t_req/9.81)*self.TSFC[:-1]*4
+        #plt.plot(self.clcd_contin[:,0])#self.TSFC)
+        #plt.plot(self.clcd_contin[:,1])
+        plt.plot(self.t_req)
+        plt.plot(self.fuel_flow)
         plt.show()
 
         '''
