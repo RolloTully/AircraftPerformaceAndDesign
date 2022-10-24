@@ -71,7 +71,6 @@ class Craft(object):
     def get_live_weight(self,flightplan):
         self.history = []
         self.FlightPlan = flightplan
-
         for self.index in range(0, self.FlightPlan.shape[0]-1):
             self.local_atmos = self.atmosphere.get_AtmosProperties(self.FlightPlan[self.index,3])
             self.time_step = self.FlightPlan[self.index+1,0] - self.FlightPlan[self.index,0]
@@ -90,26 +89,22 @@ class Craft(object):
         return self.history
 
     def get_trimCLCD(self, gamma_fp, m, h):
-        self.atmo = self.atmosphere.get_AtmosProperties(h)
+        self.atmo = self.atmosphere.get_AtmosProperties(h) #Pressure,local Temprature, Density, Speed of sound
         self.q = 0.5*self.atmosphere.gamma*self.atmo[1]*m**2
         self.L = (self.FW+self.DW)*9.81*np.cos(gamma_fp)
         self.cl = self.L/(self.q*self.S)
         self.cd = self.Cd0 + self.K*self.cl**2
-
-        print(self.q, self.L, self.cl, self.cd,self.S)
         return [self.cl,self.cd]
 
-
-    def thurst_required(self, gamma, h, cd, m):#somethings fucked
-        #print(gamma,h,cd,m)
-        self.atmo = self.atmosphere.get_AtmosProperties(h)
+    def thurst_required(self, gamma, h, cd, m):
+        self.atmo = self.atmosphere.get_AtmosProperties(h)  #Pressure,local Temprature, Density, Speed of sound
         self.drag = 0.5*self.atmo[2]*((self.atmo[3]*m)**2)*self.S*cd
         self.thrust_req = self.drag+(self.FW+self.DW)*9.81*np.sin(gamma)
-        #print(self.drag, (self.FW+self.DW)*9.81*np.sin(gamma))
         return self.thrust_req
 
-    def TSFC(self, t, m):#working
+    def TSFC(self, t, m):
         return (1/3600*9.81)*(self.TSFCLC*np.sqrt(t/self.atmosphere.T0)*m**self.TSFCLE)
+
 class main():
     def __init__(self):
         self.atmosphere = Atmosphere()
@@ -134,8 +129,6 @@ class main():
         self.t_req = np.array([self.craft.thurst_required(self.slice[0],self.slice[1],self.slice[2],self.slice[3]) for self.slice in np.dstack((self.gamma, self.Alt[:-1], self.clcd_contin[:,1],self.mach[:-1]))[0]])
         self.TSFC = np.array([self.craft.TSFC(self.slice[0], self.slice[1])  for self.slice in np.dstack((self.Temperature,self.mach))[0]])
         self.fuel_flow = (self.t_req/9.81)*self.TSFC[:-1]*4
-        #plt.plot(self.clcd_contin[:,0])#self.TSFC)
-        #plt.plot(self.clcd_contin[:,1])
         plt.plot(self.t_req)
         plt.plot(self.fuel_flow)
         plt.show()
