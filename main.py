@@ -76,12 +76,12 @@ class Craft(object):
         self.cd = self.Cd0 + self.K*self.cl**2
         return [self.cl,self.cd]
 
-    def thurst_required(self, gamma, h, cd, m):# somethings fucked
+    def thurst_required(self, gamma, h, cd, m):
         self.atmo = self.atmosphere.get_AtmosProperties(h)  #Pressure,local Temprature, Density, Speed of sound
         self.drag = 0.5*self.atmo[2]*((self.atmo[3]*m)**2)*self.S*cd
         if gamma>=0:
             self.thrust_req = self.drag+(self.FW+self.DW)*9.81*np.sin(gamma)
-        if gamma < 0:
+        if gamma<0:
             self.thrust_req = self.drag-(self.FW+self.DW)*9.81*np.sin(gamma)
         return self.thrust_req
 
@@ -115,13 +115,16 @@ class main():
         self.t_req = np.array([self.craft.thurst_required(self.slice[0],self.slice[1],self.slice[2],self.slice[3]) for self.slice in np.dstack((self.gamma, self.Alt[1:], self.clcd_contin[:,1],self.mach[1:]))[0]])
         self.TSFC = np.array([self.craft.TSFC(self.slice[0], self.slice[1])  for self.slice in np.dstack((self.Temperature,self.mach))[0]])
         self.fuel_flow = (self.t_req/9.81)*self.TSFC[:-1]
+        self.fuel_usage = self.fuel_flow*np.diff(self.Time)
+        self.comp_fw = np.array([self.craft.DW+self.craft.FW- np.sum(self.fuel_usage[0:index])   for index in range(0,self.fuel_usage.shape[0])])
         #print(self.TSFC)
         #print(self.fw)
         #plt.plot(self.Atmos_conditions[:,0])
-        plt.plot(self.TSFC)
+        #plt.plot(self.TSFC)
         #plt.plot(self.t_req)
         #plt.plot(self.mach)
-        #plt.plot(self.fuel_flow)
+        #plt.plot(self.comp_fw)
+        plt.plot(self.fuel_flow)
         #plt.show()
         #plt.plot(self.clcd_contin[:,0])
         #plt.plot(self.clcd_contin[:,1])
