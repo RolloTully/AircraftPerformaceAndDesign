@@ -6,7 +6,7 @@ import csv
 from tkinter import filedialog
 
 class Atmosphere(object):
-    def __init__(self, g = 9.8065, R = 287.05287, Gamma = 1.4, L0 = -0.0065 ,L11 = 0, L20 = 0.001, T0 =288.15, T11 = 216.65, T20 = 216.65, P0 =101325, P11 = 22632.559): #Defaults to ISA
+    def __init__(self, g = 9.8065, R = 287.05287, Gamma = 1.4, L0 = -0.0065 ,L11 = 0, L20 = 0.001, T0 =288.15, T11 = 216.65, T20 = 216.65, P0 =101325, P11 = 22632.559, RF = 0.1): #Defaults to ISA
         self.g = g    #ms^-2
         self.R = R #JKg^-1K^-1
         self.gamma = Gamma
@@ -18,7 +18,8 @@ class Atmosphere(object):
         self.T20 = T20
         self.P0=P0     #pascals
         self.P11=P11 #pascals
-        self.Rho0=1.225
+        self.Rho0= 1.225
+        self.RF = RF #fuel reserve fraction
 
     def get_AtmosProperties(self, height):
         '''Computes Static pressure, Temperature, density, and the local speed of sound'''
@@ -76,6 +77,22 @@ class Craft(object):
         self.Fuel_Density = 0
         self.passenger_number = 100
 
+    def Breguet_Altitude(self,cl, m,h,zeta):
+        self.atmo = self.atmosphere.get_AtmosProperties(h)
+        self.clcd = cl/(self.Cd0 + self.K*cl**2)
+        return ((m*self.atmo[3])/9.81*self.TSFC(self.atmo[0],m*self.atmo[3]))*self.clcd*np.log((1/(1-zeta)))
+
+    def Breguet_Mach(self,cl,m,h,zeta):
+        self.atmo = self.atmosphere.get_AtmosProperties(h)
+        self.clcd = cl/(self.Cd0 + self.K*cl**2)
+        return (2/(9.81*self.TSFC(self.atmo[0],m*self.atmo[3])))*(((2*self.MTOW)/(self.atmo[2]*cl))**0.5)*self.clcd*(1-(zeta)**-0.5)
+
+    def Breguet_Cl(self,cl, m,h,zeta):
+        '''Broken'''
+        self.atmo = self.atmosphere.get_AtmosProperties(h)
+        self.clcd = cl**0.5/(self.Cd0 + self.K*cl**2)
+        return (1/9.81*self.TSFC(self.atmo[0],m*self.atmo[3]))*self.clcd*np.log((1/(1-zeta)))
+
     def SAR_to_mpg(self, SAR):
         return ((((SAR/1609)*840)/1000)/4.546)*self.passenger_number #miles per kg
 
@@ -113,7 +130,7 @@ class Craft(object):
 class main():
     def __init__(self):
         self.atmosphere = Atmosphere()
-        self.craft = Craft(363.10, 0.0259, 0.0221, 217000, 0.358, 0.432, 0.611)
+        self.craft = Craft(363.10, 0.0259, 0.0221, 217000, 0.545, 0.432, 0.611)
         self.tools = Tools()
         self.FlightPlan = self.tools.ImportFlightPlan()
         self.Time = self.FlightPlan[:,0]
@@ -137,12 +154,14 @@ class main():
         self.SAR = np.array([self.craft.get_SAR(self.slice[0], self.slice[1], self.slice[2]) for self.slice in np.dstack((self.gamma,self.mach[1:], self.Alt[1:]))[0]])
         self.SE = np.array([self.craft.get_SE(self.slice[0], self.slice[1], self.slice[2]) for self.slice in np.dstack((self.gamma,self.mach[1:], self.Alt[1:]))[0]])
         self.mpg = np.array([self.craft.SAR_to_mpg(sar) for sar in self.SAR])
-        #plt.plot(self.TSFC)
-        #plt.show()
-        #plt.plot(self.mpg)
-        plt.plot(self.SAR)
+        self.cl_max_sar = (self.craft.Cd0/(3*self.craft.K))**0.5
+        print(self.cl_max_sar)
+        plt.plot([self.craft.Breguet_Mach(self.cl_max_sar,0.85,10972,zeta/10) for zeta in range(1,11,1)])
+
+        plt.plot([self.craft.Breguet_Cl(self.cl_max_sar,0.85,10972,zeta/10) for zeta in range(0,10,1)])
+
+        plt.plot([self.craft.Breguet_Altitude(self.cl_max_sar,0.85,10972,zeta/10) for zeta in range(0,10,1)])
         plt.show()
-        plt.plot(self.SE)
-        plt.show()
+
 if __name__=="__main__":
     main()
