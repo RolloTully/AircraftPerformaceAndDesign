@@ -68,30 +68,52 @@ class Craft(object):
         self.S = Reference_Area
         self.K = k
         self.Cd0 = cd0
-        self.MTOW = mtow
+        self.MTOW = 78000
         self.FMF = fmf
-        self.FW = self.MTOW*self.FMF
+        self.FW = self.MTOW * self.FMF
         self.DW = self.MTOW - self.FW
         self.TSFCLE = n2
         self.TSFCLC = ct2
-        self.Fuel_Density = 0
+        self.Fuel_Density = 850
         self.passenger_number = 100
+        self.OEW = 41310
+        self.Reserve_Fuel = 1800
+        self.Cruise = 0.85
+        self.Max_Fuel =  18000
+        self.Max_Payload = 19190
+        self.Payload = 19190
+    def Update(self):
+        self.w_e = self.OEW + self.Payload
+    def Block_Fuel_Range(self, m, h):
+        self.cl_max_sar = (self.Cd0/(3*self.K))**0.5
+        self.block_fuel_points = np.linspace(0,self.FMF, 100)
+        self.Alt_Block_Fuel_Range = [self.Breguet_Altitude(self.cl_max_sar, m, h, self.ratio) for self.ratio in self.block_fuel_points]
+        self.Cl_Block_Fuel_Range = [self.Breguet_Mach(self.cl_max_sar, m, h, self.ratio) for self.ratio in self.block_fuel_points]
+        self.Mach_Block_Fuel_Range = [self.Breguet_Cl(self.cl_max_sar, m, h, self.ratio) for self.ratio in self.block_fuel_points]
+        return self.Alt_Block_Fuel_Range, self.Cl_Block_Fuel_Range, self.Mach_Block_Fuel_Range
 
-    def Breguet_Altitude(self,cl, m,h,zeta):
+
+    def Breguet_Altitude(self,cl, m,h,zeta): # Working
+        self.w_e = self.MTOW * (1-zeta)
+        self.w_i = self.MTOW
+        self.atmo = self.atmosphere.get_AtmosProperties(h)
+        self.clcd = (cl**0.5)/(self.Cd0 + self.K*cl**2)
+        return (1/(9.81*self.TSFC(self.atmo[0],m*self.atmo[3])))*((2*self.MTOW)/(self.atmo[2]*self.S))**0.5*self.clcd*np.log(self.w_i/self.w_e)
+
+    def Breguet_Mach(self,cl,m,h,zeta): #Working
+        self.w_e = self.MTOW * (1-zeta)
+        self.w_i = self.MTOW
         self.atmo = self.atmosphere.get_AtmosProperties(h)
         self.clcd = cl/(self.Cd0 + self.K*cl**2)
-        return ((m*self.atmo[3])/9.81*self.TSFC(self.atmo[0],m*self.atmo[3]))*self.clcd*np.log((1/(1-zeta)))
+        return (2/(9.81*self.TSFC(self.atmo[0],m*self.atmo[3])))*((2*self.w_i)/(self.atmo[2]*self.S*cl))**0.5*self.clcd*(1-(self.w_i/self.w_e)**-0.5)
 
-    def Breguet_Mach(self,cl,m,h,zeta):
-        self.atmo = self.atmosphere.get_AtmosProperties(h)
-        self.clcd = cl/(self.Cd0 + self.K*cl**2)
-        return (2/(9.81*self.TSFC(self.atmo[0],m*self.atmo[3])))*(((2*self.MTOW)/(self.atmo[2]*cl))**0.5)*self.clcd*(1-(zeta)**-0.5)
-
-    def Breguet_Cl(self,cl, m,h,zeta):
-        '''Broken'''
+    def Breguet_Cl(self, cl,m, h,zeta): #Working
+        self.W_e = self.MTOW * (1-zeta)
+        self.W_i = self.MTOW
         self.atmo = self.atmosphere.get_AtmosProperties(h)
         self.clcd = cl**0.5/(self.Cd0 + self.K*cl**2)
-        return (1/9.81*self.TSFC(self.atmo[0],m*self.atmo[3]))*self.clcd*np.log((1/(1-zeta)))
+
+        return ((self.atmo[3]*m)/(9.81*self.TSFC(self.atmo[0],m*self.atmo[3])))*(1/(self.K*self.Cd0))**0.5*(np.arctan((self.W_i/(0.5*self.atmo[2]*(m*self.atmo[3])**2*self.S))*(self.K/self.Cd0)**0.5)-np.arctan(self.W_e/(0.5*self.atmo[2]*(m*self.atmo[3])**2*self.S))*(self.K/self.Cd0)**0.5)
 
     def SAR_to_mpg(self, SAR):
         return ((((SAR/1609)*840)/1000)/4.546)*self.passenger_number #miles per kg
@@ -130,7 +152,7 @@ class Craft(object):
 class main():
     def __init__(self):
         self.atmosphere = Atmosphere()
-        self.craft = Craft(363.10, 0.0259, 0.0221, 217000, 0.545, 0.432, 0.611)
+        self.craft = Craft(363.10, 0.0259, 0.0417, 78000, 0.545, 0.432, 0.611)
         self.tools = Tools()
         self.FlightPlan = self.tools.ImportFlightPlan()
         self.Time = self.FlightPlan[:,0]
@@ -138,6 +160,20 @@ class main():
         self.ImpactPressure = self.FlightPlan[:,4]
         self.Temperature = self.FlightPlan[:,5]
         self.mainloop()
+
+    def Payload_Range_Chart(self):
+        '''Not sure'''
+        self.Ferry_Zeta = (self.craft.MTOW-(self.craft.OEW+self.craft.Max_Payload))/self.craft.MTOW
+        self.Economic_Zeta = self.craft.Max_Fuel/self.craft.MTOW
+        self.Payload_Zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Payload+self.craft.Max_Fuel)
+        self.cl = (self.craft.Cd0/(3*self.craft.K))**0.5
+        print(self.Ferry_Zeta, self.Economic_Zeta, self.Payload_Zeta)
+        print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Ferry_Zeta))
+        print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Economic_Zeta))
+        print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Payload_Zeta))
+
+
+
 
     def mainloop(self):
         self.Atmos_conditions = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt]) #Computes the atmospheric properties alon the flight path
@@ -155,13 +191,16 @@ class main():
         self.SE = np.array([self.craft.get_SE(self.slice[0], self.slice[1], self.slice[2]) for self.slice in np.dstack((self.gamma,self.mach[1:], self.Alt[1:]))[0]])
         self.mpg = np.array([self.craft.SAR_to_mpg(sar) for sar in self.SAR])
         self.cl_max_sar = (self.craft.Cd0/(3*self.craft.K))**0.5
-        print(self.cl_max_sar)
-        plt.plot([self.craft.Breguet_Mach(self.cl_max_sar,0.85,10972,zeta/10) for zeta in range(1,11,1)])
-
-        plt.plot([self.craft.Breguet_Cl(self.cl_max_sar,0.85,10972,zeta/10) for zeta in range(0,10,1)])
-
-        plt.plot([self.craft.Breguet_Altitude(self.cl_max_sar,0.85,10972,zeta/10) for zeta in range(0,10,1)])
+        '''
+        self.Br_alt, self.Br_cl, self.Br_Mach = self.craft.Block_Fuel_Range(0.85, 10972)
+        plt.plot(self.Br_alt)
+        #plt.show()
+        plt.plot(self.Br_cl)
+        #plt.show()
+        plt.plot(self.Br_Mach)
         plt.show()
+        '''
+        self.Payload_Range_Chart()
 
 if __name__=="__main__":
     main()
