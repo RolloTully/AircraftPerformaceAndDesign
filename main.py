@@ -82,6 +82,12 @@ class Craft(object):
         self.Max_Fuel =  18000
         self.Max_Payload = 19190
         self.Payload = 19190
+        self.V_Ne = 169.8
+        self.M_Ne = 0.93
+        self.Tk_Cl = 2.51
+        self.L_Cl = 2.73
+        self.Static_Thrust = 30617*2*9.81
+
     def Update(self):
         self.w_e = self.OEW + self.Payload
     def Block_Fuel_Range(self, m, h):
@@ -149,6 +155,36 @@ class Craft(object):
     def TSFC(self, t, m):#working
         return (1/(3600*9.81))*(self.TSFCLC*np.sqrt(t/self.atmosphere.T0)*m**self.TSFCLE)
 
+    def Flight_Envelope(self):
+        self.alt_array = range(1,50000)
+        self.Mach_limit = []
+        self.Stall_limit_Tk = []
+        self.Stall_limit_L = []
+        self.V_max = []
+        self.V_min = []
+        for self.ft_alt in range(1,50000):
+            self.alt = self.ft_alt*0.3048
+            print(self.alt)
+            self.atmo = self.atmosphere.get_AtmosProperties(self.alt)
+            self.Mach_limit.append(self.M_Ne*np.sqrt(1.4*287*self.atmo[0]))
+            self.Stall_limit_Tk.append(np.sqrt((2/self.atmo[2])*(self.MTOW/self.S)*(1/self.Tk_Cl)))
+            self.Stall_limit_L.append(np.sqrt((2/self.atmo[2])*(self.MTOW/self.S)*(1/self.L_Cl)))
+            self.V_max.append( (1/(self.atmo[3]*self.Cd0))*((self.Static_Thrust/(self.MTOW*9.81))*((self.MTOW*9.81)/self.S)+((self.MTOW*9.81)/self.S)*np.sqrt((self.Static_Thrust/(self.MTOW*9.81))**2))**0;5 )
+            self.V_min.append( (1/(self.atmo[3]*self.K))*((self.Static_Thrust/self.MTOW*9.81)*(self.MTOW*9.81/self.S)-(self.MTOW*9.81/self.S)*np.sqrt((self.Static_Thrust/self.MTOW*9.81)**2-4*self.Cd0*self.K))**0.5 )
+        plt.plot(self.Mach_limit,self.alt_array)
+        plt.plot(self.Stall_limit_Tk,self.alt_array)
+        plt.plot(self.Stall_limit_L,self.alt_array)
+        plt.plot(self.V_max, self.alt_array)
+        plt.plot(self.V_min, self.alt_array)
+        print(self.V_max)
+        plt.axhline(39000)
+        plt.show()
+
+
+
+
+
+
 class main():
     def __init__(self):
         self.atmosphere = Atmosphere()
@@ -159,10 +195,10 @@ class main():
         self.Alt  = self.FlightPlan[:,3]
         self.ImpactPressure = self.FlightPlan[:,4]
         self.Temperature = self.FlightPlan[:,5]
-        self.mainloop()
+        self.craft.Flight_Envelope()
+        #self.mainloop()
 
     def Payload_Range_Chart(self):
-        '''Not sure'''
         self.Ferry_Zeta = (self.craft.MTOW-(self.craft.OEW+self.craft.Max_Payload))/self.craft.MTOW
         self.Economic_Zeta = self.craft.Max_Fuel/self.craft.MTOW
         self.Payload_Zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Payload+self.craft.Max_Fuel)
@@ -171,6 +207,7 @@ class main():
         print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Ferry_Zeta))
         print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Economic_Zeta))
         print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Payload_Zeta))
+
 
 
 
