@@ -1,5 +1,5 @@
 
-from numpy import e, array, float32
+from numpy import e, array, float32, int_, longdouble
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
@@ -23,7 +23,7 @@ class Atmosphere(object):
 
     def get_AtmosProperties(self, height):
         '''Computes Static pressure, Temperature, density, and the local speed of sound'''
-        if 0 < height <= 11e3:
+        if 0.0 <= height <= 11e3:
             self.Local_Temperature = self.T0+self.L0*(height-0)
         elif 11e3 < height <= 20e3:
             self.Local_Temperature = self.T11+self.L11*(height-11)
@@ -31,7 +31,7 @@ class Atmosphere(object):
             self.Local_Temperature = self.T20+self.L20*(height-20)
         elif 32e3< height:
             print("Height out of range")
-        if 0 < height <= 11e3:
+        if 0.0 <= height <= 11e3:
             self.Local_Pressure = self.P0*(1+(self.L0/self.T0)*height)**(-self.g/(self.R*self.L0))
         elif 11e3 < height <= 20e3:
             self.Local_Pressure = self.P11*e**((-self.g/(self.R*self.T11))*(height-11e3))
@@ -53,7 +53,7 @@ class Tools():
                 self.FlightPlan = csv.reader(self.FlightPlanCSV, delimiter=' ', quotechar='|')
                 for self.row in list(self.FlightPlan)[1:]:
                     self.formatted = self.row[0].split(",")
-                    self.formatted = array(self.formatted, dtype = float32)
+                    self.formatted = np.array(self.formatted).astype(longdouble)
                     self.ExportFlightPlan.append(self.formatted)
             return array(self.ExportFlightPlan)
     def Mach_from_pressures(self, Sp, Ip,gamma):
@@ -68,7 +68,7 @@ class Craft(object):
         self.S = Reference_Area
         self.K = k
         self.Cd0 = cd0
-        self.MTOW = 78000
+        self.MTOW = 2270000
         self.FMF = fmf
         self.FW = self.MTOW * self.FMF
         self.DW = self.MTOW - self.FW
@@ -79,14 +79,14 @@ class Craft(object):
         self.OEW = 41310
         self.Reserve_Fuel = 1800
         self.Cruise = 0.85
-        self.Max_Fuel =  18000
-        self.Max_Payload = 19190
+        self.Max_Fuel =  73000
+        self.Max_Payload = 50500
         self.Payload = 19190
         self.V_Ne = 169.8
         self.M_Ne = 0.93
         self.Tk_Cl = 2.51
         self.L_Cl = 2.73
-        self.Static_Thrust = 30617*2*9.81
+        self.Static_Thrust = 2*316000
 
     def Update(self):
         self.w_e = self.OEW + self.Payload
@@ -146,9 +146,10 @@ class Craft(object):
     def thurst_required(self, gamma, h, cd, m):
         self.atmo = self.atmosphere.get_AtmosProperties(h)  #Pressure,local Temprature, Density, Speed of sound
         self.drag = 0.5*self.atmo[2]*((self.atmo[3]*m)**2)*self.S*cd
+
         if gamma>=0:
             self.thrust_req = self.drag+(self.FW+self.DW)*9.81*np.sin(gamma)
-        if gamma<0:
+        elif gamma<0:
             self.thrust_req = self.drag-(self.FW+self.DW)*9.81*np.sin(gamma)
         return self.thrust_req
 
@@ -164,19 +165,17 @@ class Craft(object):
         self.V_min = []
         for self.ft_alt in range(1,50000):
             self.alt = self.ft_alt*0.3048
-            print(self.alt)
             self.atmo = self.atmosphere.get_AtmosProperties(self.alt)
             self.Mach_limit.append(self.M_Ne*np.sqrt(1.4*287*self.atmo[0]))
             self.Stall_limit_Tk.append(np.sqrt((2/self.atmo[2])*(self.MTOW/self.S)*(1/self.Tk_Cl)))
             self.Stall_limit_L.append(np.sqrt((2/self.atmo[2])*(self.MTOW/self.S)*(1/self.L_Cl)))
-            self.V_max.append( (1/(self.atmo[3]*self.Cd0))*((self.Static_Thrust/(self.MTOW*9.81))*((self.MTOW*9.81)/self.S)+((self.MTOW*9.81)/self.S)*np.sqrt((self.Static_Thrust/(self.MTOW*9.81))**2))**0;5 )
+            self.V_max.append( (1/(self.atmo[3]*self.Cd0))*((self.Static_Thrust/(self.MTOW*9.81))*((self.MTOW*9.81)/self.S)+((self.MTOW*9.81)/self.S)*np.sqrt((self.Static_Thrust/(self.MTOW*9.81))**2))**0.5 )
             self.V_min.append( (1/(self.atmo[3]*self.K))*((self.Static_Thrust/self.MTOW*9.81)*(self.MTOW*9.81/self.S)-(self.MTOW*9.81/self.S)*np.sqrt((self.Static_Thrust/self.MTOW*9.81)**2-4*self.Cd0*self.K))**0.5 )
         plt.plot(self.Mach_limit,self.alt_array)
         plt.plot(self.Stall_limit_Tk,self.alt_array)
         plt.plot(self.Stall_limit_L,self.alt_array)
         plt.plot(self.V_max, self.alt_array)
         plt.plot(self.V_min, self.alt_array)
-        print(self.V_max)
         plt.axhline(39000)
         plt.show()
 
@@ -188,15 +187,19 @@ class Craft(object):
 class main():
     def __init__(self):
         self.atmosphere = Atmosphere()
-        self.craft = Craft(363.10, 0.0259, 0.0417, 78000, 0.545, 0.432, 0.611)
+        self.craft = Craft(361.6, 0.0259, 0.0417, 78000, 0.545, 0.432, 0.611)
         self.tools = Tools()
         self.FlightPlan = self.tools.ImportFlightPlan()
-        self.Time = self.FlightPlan[:,0]
-        self.Alt  = self.FlightPlan[:,3]
-        self.ImpactPressure = self.FlightPlan[:,4]
-        self.Temperature = self.FlightPlan[:,5]
-        self.craft.Flight_Envelope()
-        #self.mainloop()
+        self.Time = self.FlightPlan[:,0]#-self.FlightPlan[0,0]
+        self.Time = self.Time# - self.Time[0]
+        self.Latitude = self.FlightPlan[:,1]
+        self.Longditude = self.FlightPlan[:,2]
+        self.Alt  = self.FlightPlan[:,3]/3.280839895 #Feet
+        #self.ImpactPressure = self.FlightPlan[:,4]
+        self.speed = self.FlightPlan[:,3]
+        #self.Temperature = self.FlightPlan[:,5]
+        #self.craft.Flight_Envelope()
+        self.mainloop()
 
     def Payload_Range_Chart(self):
         self.Ferry_Zeta = (self.craft.MTOW-(self.craft.OEW+self.craft.Max_Payload))/self.craft.MTOW
@@ -214,13 +217,20 @@ class main():
 
     def mainloop(self):
         self.Atmos_conditions = np.array([self.atmosphere.get_AtmosProperties(alt) for alt in self.Alt]) #Computes the atmospheric properties alon the flight path
-        self.mach = np.array([self.tools.Mach_from_pressures(self.slice[0], self.slice[1], self.atmosphere.gamma) for self.slice in np.dstack((self.Atmos_conditions[:,1], self.ImpactPressure))[0]])
-        self.TAS = self.mach*self.Atmos_conditions[:,3]
+        #self.mach = np.array([self.tools.Mach_from_pressures(self.slice[0], self.slice[1], self.atmosphere.gamma) for self.slice in np.dstack((self.Atmos_conditions[:,1], self.ImpactPressure))[0]])
+        self.mach = self.speed/self.Atmos_conditions[:,3]
+        self.TAS = self.speed # We make this assumtion as there is no pitotstatic data avalable
+        #self.TAS = self.mach*self.Atmos_conditions[:,3]
         self.climb_rate = (np.diff(self.Alt)/np.diff(self.Time)) #Computes the aircraft climb rate
+        print(self.TAS)
+
         self.gamma = np.arcsin(self.climb_rate/self.TAS[1:])  #Flight path angle
+
         self.clcd_contin = np.array([self.craft.get_trimCLCD(self.slice[0],self.slice[1],self.slice[2]) for self.slice in np.dstack((self.gamma, self.mach[1:], self.Alt[1:]))[0]])
+
         self.t_req = np.array([self.craft.thurst_required(self.slice[0],self.slice[1],self.slice[2],self.slice[3]) for self.slice in np.dstack((self.gamma, self.Alt[1:], self.clcd_contin[:,1],self.mach[1:]))[0]])
-        self.TSFC = np.array([self.craft.TSFC(self.slice[0], self.slice[1])  for self.slice in np.dstack((self.Temperature,self.mach))[0]])
+
+        self.TSFC = np.array([self.craft.TSFC(self.slice[0], self.slice[1])  for self.slice in np.dstack((self.Atmos_conditions[:,0],self.mach))[0]])
         self.fuel_flow = (self.t_req/9.81)*self.TSFC[1:]
         self.fuel_usage = self.fuel_flow*np.diff(self.Time)
         self.comp_fw = np.array([self.craft.DW+self.craft.FW- np.sum(self.fuel_usage[0:index])   for index in range(0,self.fuel_usage.shape[0])])
@@ -228,6 +238,16 @@ class main():
         self.SE = np.array([self.craft.get_SE(self.slice[0], self.slice[1], self.slice[2]) for self.slice in np.dstack((self.gamma,self.mach[1:], self.Alt[1:]))[0]])
         self.mpg = np.array([self.craft.SAR_to_mpg(sar) for sar in self.SAR])
         self.cl_max_sar = (self.craft.Cd0/(3*self.craft.K))**0.5
+        plt.plot(self.t_req/np.max(self.t_req))
+        plt.plot(self.TSFC/np.max(self.TSFC))
+        plt.show()
+        plt.plot(self.speed)
+        plt.show()
+        plt.plot(self.Alt)
+        plt.show()
+        plt.plot(self.climb_rate)
+        plt.show()
+
         '''
         self.Br_alt, self.Br_cl, self.Br_Mach = self.craft.Block_Fuel_Range(0.85, 10972)
         plt.plot(self.Br_alt)
