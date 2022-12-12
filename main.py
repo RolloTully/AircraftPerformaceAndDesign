@@ -65,27 +65,27 @@ class Craft(object):
     def __init__(self, Reference_Area, k, cd0, mtow, fmf, n2, ct2):
         self.atmosphere = Atmosphere()
         self.tools = Tools()
-        self.S = Reference_Area
-        self.K = k
-        self.Cd0 = cd0
-        self.MTOW = 2270000
+        self.S = 260
+        self.K = 2.91
+        self.Cd0 = 0.34
+        self.MTOW = 155000
         self.FMF = fmf
         self.FW = self.MTOW * self.FMF
         self.DW = self.MTOW - self.FW
         self.TSFCLE = n2
         self.TSFCLC = ct2
-        self.Fuel_Density = 850
-        self.passenger_number = 100
-        self.OEW = 41310
-        self.Reserve_Fuel = 1800
-        self.Cruise = 0.85
-        self.Max_Fuel =  73000
-        self.Max_Payload = 50500
+        self.Fuel_Density = 785
+        self.passenger_number = 2
+        self.OEW = 86500
+        self.Cruise = 0.86
+        self.Max_Fuel =  23573
+        self.Max_Payload = 25300
         self.Payload = 19190
         self.V_Ne = 169.8
         self.M_Ne = 0.93
         self.Tk_Cl = 2.51
         self.L_Cl = 2.73
+        self.SFC = 0.016
         self.Static_Thrust = 2*316000
 
     def Update(self):
@@ -99,30 +99,30 @@ class Craft(object):
         return self.Alt_Block_Fuel_Range, self.Cl_Block_Fuel_Range, self.Mach_Block_Fuel_Range
 
 
-    def Breguet_Altitude(self,cl, m,h,zeta): # Working
-        self.w_e = self.MTOW * (1-zeta)
-        self.w_i = self.MTOW
+    def Breguet_Altitude(self, cl, m,h,zeta, operating_weight): # Working
+        self.w_e = operating_weight * (1-zeta)
+        self.w_i = operating_weight
         self.atmo = self.atmosphere.get_AtmosProperties(h)
         self.clcd = (cl**0.5)/(self.Cd0 + self.K*cl**2)
-        return (1/(9.81*self.TSFC(self.atmo[0],m*self.atmo[3])))*((2*self.MTOW)/(self.atmo[2]*self.S))**0.5*self.clcd*np.log(self.w_i/self.w_e)
+        return ((m*self.atmo[3])/9.81)*(1/self.SFC)*(cl/(self.Cd0+self.K*cl**2))*np.log(self.w_i/self.w_e)
 
-    def Breguet_Mach(self,cl,m,h,zeta): #Working
-        self.w_e = self.MTOW * (1-zeta)
-        self.w_i = self.MTOW
+
+    def Breguet_Mach(self, cl, m, h, zeta, operating_weight): #Working
+        self.w_e = operating_weight * (1-zeta)
+        self.w_i = operating_weight
         self.atmo = self.atmosphere.get_AtmosProperties(h)
         self.clcd = cl/(self.Cd0 + self.K*cl**2)
-        return (2/(9.81*self.TSFC(self.atmo[0],m*self.atmo[3])))*((2*self.w_i)/(self.atmo[2]*self.S*cl))**0.5*self.clcd*(1-(self.w_i/self.w_e)**-0.5)
+        return (2/(9.81*self.SFC))*((2*self.w_i)/(self.atmo[2]*self.S*cl))**0.5*self.clcd*(1-(self.w_i/self.w_e)**-0.5)
 
-    def Breguet_Cl(self, cl,m, h,zeta): #Working
-        self.W_e = self.MTOW * (1-zeta)
-        self.W_i = self.MTOW
+    def Breguet_Cl(self, cl, m, h, zeta, operating_weight): #Working
+        self.W_e = operating_weight * (1-zeta)
+        self.W_i = operating_weight
         self.atmo = self.atmosphere.get_AtmosProperties(h)
         self.clcd = cl**0.5/(self.Cd0 + self.K*cl**2)
-
-        return ((self.atmo[3]*m)/(9.81*self.TSFC(self.atmo[0],m*self.atmo[3])))*(1/(self.K*self.Cd0))**0.5*(np.arctan((self.W_i/(0.5*self.atmo[2]*(m*self.atmo[3])**2*self.S))*(self.K/self.Cd0)**0.5)-np.arctan(self.W_e/(0.5*self.atmo[2]*(m*self.atmo[3])**2*self.S))*(self.K/self.Cd0)**0.5)
+        return ((self.atmo[3]*m)/(9.81*self.SFC))*(1/(self.K*self.Cd0))**0.5*(np.arctan((self.W_i/(0.5*self.atmo[2]*(m*self.atmo[3])**2*self.S))*(self.K/self.Cd0)**0.5)-np.arctan(self.W_e/(0.5*self.atmo[2]*(m*self.atmo[3])**2*self.S))*(self.K/self.Cd0)**0.5)
 
     def SAR_to_mpg(self, SAR):
-        return ((((SAR/1609)*840)/1000)/4.546)*self.passenger_number #miles per kg
+        return ((((SAR/1609)*840))/4.546)*self.passenger_number #miles per kg
 
     def get_SAR(self,gamma,m,h):
         self.atmo = self.atmosphere.get_AtmosProperties(h)
@@ -189,6 +189,7 @@ class main():
         self.atmosphere = Atmosphere()
         self.craft = Craft(361.6, 0.0259, 0.0417, 78000, 0.545, 0.432, 0.611)
         self.tools = Tools()
+
         self.FlightPlan = self.tools.ImportFlightPlan()
         self.Time = self.FlightPlan[:,0]#-self.FlightPlan[0,0]
         self.Time = self.Time# - self.Time[0]
@@ -196,20 +197,92 @@ class main():
         self.Longditude = self.FlightPlan[:,2]
         self.Alt  = self.FlightPlan[:,3]/3.280839895 #Feet
         #self.ImpactPressure = self.FlightPlan[:,4]
-        self.speed = self.FlightPlan[:,3]
+        self.speed = self.FlightPlan[:,4]*0.514
         #self.Temperature = self.FlightPlan[:,5]
         #self.craft.Flight_Envelope()
+
         self.mainloop()
 
+        self.Payload_Range_Chart()
+
     def Payload_Range_Chart(self):
-        self.Ferry_Zeta = (self.craft.MTOW-(self.craft.OEW+self.craft.Max_Payload))/self.craft.MTOW
-        self.Economic_Zeta = self.craft.Max_Fuel/self.craft.MTOW
-        self.Payload_Zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Payload+self.craft.Max_Fuel)
         self.cl = (self.craft.Cd0/(3*self.craft.K))**0.5
-        print(self.Ferry_Zeta, self.Economic_Zeta, self.Payload_Zeta)
-        print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Ferry_Zeta))
-        print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Economic_Zeta))
-        print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Payload_Zeta))
+        self.Ferry_Zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Max_Fuel)
+
+        self.Payload_Zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Payload+self.craft.Max_Fuel)
+        self.OEWPAY_weight = []
+        self.OEWPAYRES_weight = []
+        self.Total_weight = []
+        self.range = []
+        '''First section, increasing fuel'''
+        self.block_fuel_ratio_range  = [0,(self.craft.OEW+self.craft.Max_Payload)/self.craft.MTOW]
+        for self.Fuel_weight in np.linspace(0,self.craft.MTOW-(self.craft.OEW+self.craft.Max_Payload),100):
+            self.OEWPAY_weight.append(self.craft.OEW+self.craft.Max_Payload)
+            self.OEWPAYRES_weight.append(self.craft.OEW+self.craft.Max_Payload+0.1*self.Fuel_weight)
+            self.Total_weight.append(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)
+            self.range.append(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,(self.Fuel_weight/(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)),self.Fuel_weight+self.craft.OEW+self.craft.Max_Payload))
+        plt.axvline(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,(self.Fuel_weight/(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)),self.Fuel_weight+self.craft.OEW+self.craft.Max_Payload), color = 'g', linestyle = '--')
+        plt.text(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,(self.Fuel_weight/(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)),self.Fuel_weight+self.craft.OEW+self.craft.Max_Payload), 5000, "Max Payload Range", rotation = 270)
+        print("Max Economic Range:")
+        print(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,(self.Fuel_weight/(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)),self.Fuel_weight+self.craft.OEW+self.craft.Max_Payload))
+        '''Second section, decreasing payload, increasing fuel'''
+        self.F_Fuel_weight = self.Fuel_weight
+        for self.Fuel_weight in np.linspace(self.F_Fuel_weight, self.craft.Max_Fuel, 100):
+            self.OEWPAYRES_weight.append(self.craft.OEW+(self.craft.MTOW-(self.craft.OEW+self.Fuel_weight*0.9)))
+            self.OEWPAY_weight.append(self.craft.OEW+(self.craft.MTOW-(self.craft.OEW+self.Fuel_weight)))
+            self.Total_weight.append(self.craft.MTOW)
+            self.zeta = self.Fuel_weight/self.craft.MTOW
+            self.range.append(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.MTOW))
+        plt.axvline(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.MTOW), color = 'b', linestyle = '--')
+        plt.text(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.MTOW), 5000, "Max Economic Range", rotation = 270)
+        print("Max Payload range:")
+        print(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.MTOW))
+
+        '''Third section decreasing payload, constant fuel'''
+        self.starting_payload_weight = self.craft.MTOW-(self.craft.OEW+self.craft.Max_Fuel)
+        for self.Payload_weight in np.linspace(self.starting_payload_weight,0,100):
+            self.OEWPAYRES_weight.append(self.craft.OEW+self.Payload_weight+0.1*self.craft.Max_Fuel)
+            self.OEWPAY_weight.append(self.craft.OEW+self.Payload_weight)
+            self.Total_weight.append(self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight)
+            self.zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight)
+            self.range.append(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight))
+        print(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight))
+        print("Maximum ferry range:")
+        print(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight))
+
+
+        '''Plotting'''
+        plt.title("Payload-Range chart for A330-323")
+        plt.xlabel("Trip Range, (km)")
+        plt.ylabel("Weight W,(kgf)")
+        plt.grid()
+        print(len(self.range), len(self.OEWPAYRES_weight))
+        plt.plot(self.range,self.OEWPAY_weight, label = "OEW + PAY")
+        plt.plot(self.range,self.OEWPAYRES_weight, label = "OEW +PAY + RES")
+        plt.plot(self.range,self.Total_weight, label = "OEW + PAY + FUEL")
+        plt.fill_between(np.array(self.range)[::-1],np.array(self.Total_weight)[::-1],np.array(self.OEWPAYRES_weight)[::-1],np.array(self.Total_weight)[::-1]>np.array(self.OEWPAYRES_weight)[::-1] ,color = 'green', alpha = 0.15)
+        plt.fill_between(np.array(self.range)[::-1],np.array(self.OEWPAYRES_weight)[::-1],np.array(self.OEWPAY_weight)[::-1],np.array(self.OEWPAYRES_weight)[::-1]>np.array(self.OEWPAY_weight)[::-1] ,color = 'orange', alpha = 0.15)
+        plt.fill_between(np.array(self.range)[::-1],np.array(self.OEWPAY_weight)[::-1],np.full((300),self.craft.OEW)[::-1],np.array(self.OEWPAY_weight)[::-1]>np.full((300),self.craft.OEW)[::-1] ,color = 'blue', alpha = 0.15)
+        plt.fill_between(np.array(self.range)[::-1],0,np.full((300),self.craft.OEW)[::-1],color = 'black', alpha = 0.15)
+        plt.axvline(x=self.craft.Breguet_Altitude(self.cl, self.craft.Cruise, 10668,self.Ferry_Zeta, self.craft.OEW+self.craft.Max_Fuel), color = 'r', linestyle = '--')
+        plt.text(self.craft.Breguet_Altitude(self.cl, self.craft.Cruise, 10668,self.Ferry_Zeta, self.craft.OEW+self.craft.Max_Fuel), 5000, "Max Ferry Range", rotation = 270)
+
+        plt.axhline(y = self.craft.OEW, color = 'k', linestyle = '-.',label = "Operating empty weight")
+        plt.axhline(y = self.craft.MTOW, color = 'k', linestyle = '-.', label = "Maximum takeoff weight")
+        plt.text(100, self.craft.OEW+1500, "OEW")
+        plt.text(100, self.craft.MTOW+1500, " MTOW")
+
+        plt.ylim([0,self.craft.MTOW*1.1])
+        plt.xlim([0,None])
+        plt.legend()
+        plt.show()
+
+
+
+        #print(self.Ferry_Zeta, self.Economic_Zeta, self.Payload_Zeta)
+        #print()
+        #print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Economic_Zeta))
+        #print(self.craft.Breguet_Altitude(self.cl, 0.8, 10668,self.Payload_Zeta))
 
 
 
@@ -222,7 +295,8 @@ class main():
         self.TAS = self.speed # We make this assumtion as there is no pitotstatic data avalable
         #self.TAS = self.mach*self.Atmos_conditions[:,3]
         self.climb_rate = (np.diff(self.Alt)/np.diff(self.Time)) #Computes the aircraft climb rate
-        print(self.TAS)
+        #print(self.climb_rate)
+        #print(self.TAS)
 
         self.gamma = np.arcsin(self.climb_rate/self.TAS[1:])  #Flight path angle
 
@@ -238,18 +312,19 @@ class main():
         self.SE = np.array([self.craft.get_SE(self.slice[0], self.slice[1], self.slice[2]) for self.slice in np.dstack((self.gamma,self.mach[1:], self.Alt[1:]))[0]])
         self.mpg = np.array([self.craft.SAR_to_mpg(sar) for sar in self.SAR])
         self.cl_max_sar = (self.craft.Cd0/(3*self.craft.K))**0.5
-        plt.plot(self.t_req/np.max(self.t_req))
-        plt.plot(self.TSFC/np.max(self.TSFC))
-        plt.show()
-        plt.plot(self.speed)
-        plt.show()
-        plt.plot(self.Alt)
-        plt.show()
-        plt.plot(self.climb_rate)
+        #plt.plot(self.Time,self.mach)
+        #plt.plot(self.Time,self.Alt/np.max(self.Alt))
+        #plt.show()
+        plt.plot(self.Time[1:], self.SAR)
+        #plt.plot(self.SE)
+        #plt.show()
+        #plt.plot(self.Alt)
+        #plt.show()
+        #plt.plot(self.climb_rate)
         plt.show()
 
         '''
-        self.Br_alt, self.Br_cl, self.Br_Mach = self.craft.Block_Fuel_Range(0.85, 10972)
+        self.Br_alt, self.Br_cl, self.Br_Mach = self.craft.Block_Fuel_Range(self.craft.Cruise, 10972)
         plt.plot(self.Br_alt)
         #plt.show()
         plt.plot(self.Br_cl)
