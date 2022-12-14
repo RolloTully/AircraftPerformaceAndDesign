@@ -65,31 +65,35 @@ class Craft(object):
     def __init__(self, Reference_Area, k, cd0, mtow, fmf, n2, ct2):
         self.atmosphere = Atmosphere()
         self.tools = Tools()
-        self.S = 260
-        self.K = 2.91
-        self.Cd0 = 0.34
-        self.MTOW = 155000
+
+
+
+
         self.FMF = fmf
-        self.FW = self.MTOW * self.FMF
-        self.DW = self.MTOW - self.FW
+
         self.TSFCLE = n2
         self.TSFCLC = ct2
         self.Fuel_Density = 785
         self.passenger_number = 2
-        self.OEW = 86500
-        self.Cruise = 0.86
-        self.Max_Fuel =  23573
-        self.Max_Payload = 25300
-        self.Payload = 19190
-        self.V_Ne = 169.8
-        self.M_Ne = 0.93
-        self.Tk_Cl = 2.51
-        self.L_Cl = 2.73
-        self.SFC = 0.016
-        self.Static_Thrust = 2*316000
+        self.OEW = 134000*9.81
+        self.MTOW = 227000*9.81
+        self.Max_Payload = 44000*9.81
+        self.Max_Fuel = 73300*9.81
+        self.Cruise = 0.7
+        self.Static_Thrust = 2*2570000
+        self.S = 260
+        self.Cd0 = 0.3
+        self.K = 0.291
+        self.SFC = 0.0165
+        self.max_cruise_alt = 31000
 
-    def Update(self):
-        self.w_e = self.OEW + self.Payload
+        self.FW = 0.8*self.Max_Fuel
+        self.DW = self.OEW+self.Max_Payload
+        self.V_Ne = 203
+        self.M_Ne = 0.88
+        self.Tk_Cl = 2.44
+        self.L_Cl = 2.98
+        self.q_limit = 101325*(( 1+ (0.4/2)*(self.V_Ne/331)**2   )**(1.4/(0.4)) -1)
     def Block_Fuel_Range(self, m, h):
         self.cl_max_sar = (self.Cd0/(3*self.K))**0.5
         self.block_fuel_points = np.linspace(0,self.FMF, 100)
@@ -100,10 +104,12 @@ class Craft(object):
 
 
     def Breguet_Altitude(self, cl, m,h,zeta, operating_weight): # Working
+        #print(zeta,operating_weight)
         self.w_e = operating_weight * (1-zeta)
         self.w_i = operating_weight
         self.atmo = self.atmosphere.get_AtmosProperties(h)
         self.clcd = (cl**0.5)/(self.Cd0 + self.K*cl**2)
+        #print(self.w_i, self.w_e, self.w_i/self.w_e, zeta)
         return ((m*self.atmo[3])/9.81)*(1/self.SFC)*(cl/(self.Cd0+self.K*cl**2))*np.log(self.w_i/self.w_e)
 
 
@@ -154,31 +160,50 @@ class Craft(object):
         return self.thrust_req
 
     def TSFC(self, t, m):#working
-        return (1/(3600*9.81))*(self.TSFCLC*np.sqrt(t/self.atmosphere.T0)*m**self.TSFCLE)
+        return (1/(3600))*(self.TSFCLC*np.sqrt(t/self.atmosphere.T0)*m**self.TSFCLE)
 
     def Flight_Envelope(self):
-        self.alt_array = range(1,50000)
+        self.alt_array = range(1,40000)
         self.Mach_limit = []
+        self.q_max = []
         self.Stall_limit_Tk = []
         self.Stall_limit_L = []
-        self.V_max = []
-        self.V_min = []
-        for self.ft_alt in range(1,50000):
+        self.V_max_H = []
+        self.V_max_T = []
+        self.t_a=[]
+        #self.V_max_mach_limit = [self.cruise*self.atmosphere.get_AtmosProperties(h*0.3048) for h in self.alt_array]
+        for self.ft_alt in range(1,40000):
             self.alt = self.ft_alt*0.3048
             self.atmo = self.atmosphere.get_AtmosProperties(self.alt)
+            self.thrust_avalable = self.Static_Thrust*(self.atmo[2]/self.atmosphere.Rho0)
             self.Mach_limit.append(self.M_Ne*np.sqrt(1.4*287*self.atmo[0]))
             self.Stall_limit_Tk.append(np.sqrt((2/self.atmo[2])*(self.MTOW/self.S)*(1/self.Tk_Cl)))
             self.Stall_limit_L.append(np.sqrt((2/self.atmo[2])*(self.MTOW/self.S)*(1/self.L_Cl)))
-            self.V_max.append( (1/(self.atmo[3]*self.Cd0))*((self.Static_Thrust/(self.MTOW*9.81))*((self.MTOW*9.81)/self.S)+((self.MTOW*9.81)/self.S)*np.sqrt((self.Static_Thrust/(self.MTOW*9.81))**2))**0.5 )
-            self.V_min.append( (1/(self.atmo[3]*self.K))*((self.Static_Thrust/self.MTOW*9.81)*(self.MTOW*9.81/self.S)-(self.MTOW*9.81/self.S)*np.sqrt((self.Static_Thrust/self.MTOW*9.81)**2-4*self.Cd0*self.K))**0.5 )
-        plt.plot(self.Mach_limit,self.alt_array)
-        plt.plot(self.Stall_limit_Tk,self.alt_array)
-        plt.plot(self.Stall_limit_L,self.alt_array)
-        plt.plot(self.V_max, self.alt_array)
-        plt.plot(self.V_min, self.alt_array)
-        plt.axhline(39000)
+            self.q_max.append(np.sqrt((2*self.q_limit)/self.atmo[2]))
+            print(np.sqrt((2*self.q_limit)/self.atmo[2]))
+            print(self.q_limit, self.atmo[2])
+            #self.Stall_limit_L.append(np.sqrt((2/self.atmo[2])*(self.MTOW/self.S)*(1/self.L_Cl)))
+            #self.V_max_H.append( ((1/(self.atmo[3]*self.Cd0))*((self.Static_Thrust/(self.MTOW))*( (self.MTOW)/self.S)+( (self.MTOW)/self.S)*np.sqrt( (((self.Static_Thrust/(self.MTOW)))**2)-4*self.Cd0*self.K  )   )  )**0.5)
+            #self.V_max_T.append( ((1/(self.atmo[3]*self.Cd0))*((self.Static_Thrust/(self.MTOW))*( (self.MTOW)/self.S)-( (self.MTOW)/self.S)*np.sqrt( (((self.Static_Thrust/(self.MTOW)))**2)-4*self.Cd0*self.K  )   )  )**0.5)
+            self.V_max_T.append( ((1/(self.atmo[2]*self.Cd0))*((self.thrust_avalable/(self.MTOW))*( (self.MTOW)/self.S)+( (self.MTOW)/self.S)*np.sqrt((((self.thrust_avalable/(self.MTOW)))**2)-4*self.Cd0*self.K  )   )  )**0.5)
+            self.V_max_H.append( ((1/(self.atmo[2]*self.Cd0))*((self.thrust_avalable/(self.MTOW))*( (self.MTOW)/self.S)-( (self.MTOW)/self.S)*np.sqrt((((self.thrust_avalable/(self.MTOW)))**2)-4*self.Cd0*self.K  )   )  )**0.5)
+            # ((1/(self.atmo[3]*self.Cd0))*((self.Static_Thrust/(self.MTOW))*( (self.MTOW)/self.S)+( (self.MTOW)/self.S)*np.sqrt( (((self.Static_Thrust/(self.MTOW)))**2)-4*self.Cd0*self.K  )   )  )**0.5
+        '''Formatting Plots'''
+        #plt.grid()
+        #plt.plot(self.t_a)
+        #plt.show()
+        plt.title("Calculated flight evnelope for A300-700")
+        plt.plot(self.Mach_limit,self.alt_array,label = "Mach Limit")
+        plt.plot(self.Stall_limit_Tk ,self.alt_array,linestyle = '--',  label = "Takeoff Stall Limit")
+        plt.plot(self.Stall_limit_L ,self.alt_array,linestyle = '--',  label = "Landing Stall Limit")
+        plt.plot(self.V_max_T, self.alt_array, color = "r", label = "Max thrust available speed")
+        plt.plot(self.V_max_H, self.alt_array, color = "r")
+        plt.plot(self.q_max,self.alt_array, color = 'violet', label = "Structural limit")
+        plt.ylim([0,None])
+        plt.legend()
+        plt.text(30,self.max_cruise_alt+200,"Max cruise altitude")
+        plt.axhline(self.max_cruise_alt,color = 'k', linestyle = '-.', label = "Max Cruise altitude")
         plt.show()
-
 
 
 
@@ -199,17 +224,15 @@ class main():
         #self.ImpactPressure = self.FlightPlan[:,4]
         self.speed = self.FlightPlan[:,4]*0.514
         #self.Temperature = self.FlightPlan[:,5]
-        #self.craft.Flight_Envelope()
-
+        self.craft.Flight_Envelope()
         self.mainloop()
-
         self.Payload_Range_Chart()
 
     def Payload_Range_Chart(self):
         self.cl = (self.craft.Cd0/(3*self.craft.K))**0.5
         self.Ferry_Zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Max_Fuel)
 
-        self.Payload_Zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Payload+self.craft.Max_Fuel)
+        self.Payload_Zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Max_Payload+self.craft.Max_Fuel)
         self.OEWPAY_weight = []
         self.OEWPAYRES_weight = []
         self.Total_weight = []
@@ -220,6 +243,7 @@ class main():
             self.OEWPAY_weight.append(self.craft.OEW+self.craft.Max_Payload)
             self.OEWPAYRES_weight.append(self.craft.OEW+self.craft.Max_Payload+0.1*self.Fuel_weight)
             self.Total_weight.append(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)
+            #print(self.craft.MTOW,self.craft.OEW,self.craft.Max_Payload)
             self.range.append(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,(self.Fuel_weight/(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)),self.Fuel_weight+self.craft.OEW+self.craft.Max_Payload))
         plt.axvline(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,(self.Fuel_weight/(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)),self.Fuel_weight+self.craft.OEW+self.craft.Max_Payload), color = 'g', linestyle = '--')
         plt.text(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,(self.Fuel_weight/(self.craft.OEW+self.craft.Max_Payload+self.Fuel_weight)),self.Fuel_weight+self.craft.OEW+self.craft.Max_Payload), 5000, "Max Payload Range", rotation = 270)
@@ -246,17 +270,16 @@ class main():
             self.Total_weight.append(self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight)
             self.zeta = self.craft.Max_Fuel/(self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight)
             self.range.append(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight))
-        print(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight))
         print("Maximum ferry range:")
         print(self.craft.Breguet_Altitude(self.cl,self.craft.Cruise,10668,self.zeta,self.craft.OEW+self.craft.Max_Fuel+self.Payload_weight))
 
 
         '''Plotting'''
-        plt.title("Payload-Range chart for A330-323")
+        plt.title("Payload-Range chart for B777-200")
         plt.xlabel("Trip Range, (km)")
         plt.ylabel("Weight W,(kgf)")
         plt.grid()
-        print(len(self.range), len(self.OEWPAYRES_weight))
+
         plt.plot(self.range,self.OEWPAY_weight, label = "OEW + PAY")
         plt.plot(self.range,self.OEWPAYRES_weight, label = "OEW +PAY + RES")
         plt.plot(self.range,self.Total_weight, label = "OEW + PAY + FUEL")
@@ -274,7 +297,7 @@ class main():
 
         plt.ylim([0,self.craft.MTOW*1.1])
         plt.xlim([0,None])
-        plt.legend()
+        #plt.legend()
         plt.show()
 
 
@@ -321,6 +344,10 @@ class main():
         #plt.plot(self.Alt)
         #plt.show()
         #plt.plot(self.climb_rate)
+        plt.title("Calculated SAR for B777-200")
+        plt.xlabel("Travel time, Seconds")
+        plt.ylabel("SAR, kg per meter")
+        plt.grid()
         plt.show()
 
         '''
@@ -332,7 +359,7 @@ class main():
         plt.plot(self.Br_Mach)
         plt.show()
         '''
-        self.Payload_Range_Chart()
+        #self.Payload_Range_Chart()
 
 if __name__=="__main__":
     main()
