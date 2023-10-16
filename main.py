@@ -70,13 +70,6 @@ class Craft(object):
         self.TSFCLC = ct2
         self.Fuel_Density = 785
         self.passenger_number = 2
-
-
-
-
-
-
-
         self.OEW = 144379*9.81
         self.MTOW = 347815*9.81
         self.Max_Payload = 103737*9.81
